@@ -1,15 +1,10 @@
-import xarray as xr
 import numpy as np
 import datetime as dt
-import matplotlib 
-import matplotlib.pyplot as plt
 import copy
 from scipy import stats
-import progressbar
-import itertools
-import pandas as pd
-import ipdb
 import scipy
+import itertools
+import ipdb
 import statsmodels.api as sm
 
 import arrows_plotting_temp as apt
@@ -17,32 +12,6 @@ import utilities as ut
 import CEN as CEN
 
 
-def main():
-
-	#############################################################################
-	vars = ['ICE', 'THF', 'URALS', 'V*T*', 'SPV', 'NAO', 'IR']
-	timescales='monthly' # monthly / submonthly / pentad
-	step12_sigs = [0.05,0.1,0.2]
-	step34_sig=0.05
-	CEN_lag=2
-	lags = list(range(0, CEN_lag + 1))
-	scheume_autoc=False# Not Allowing to calculate the correlation of autocorrelation in step1
-
-	half_to_full_mon=False
-	pathway_highlight=False
-	step3_px=None
-	import sys; f_add_n = sys.argv[1]
-	##############################################################################
-
-	mon_var_lag_ts = CEN_mon_var_lag_initiate(timescales, vars, lags, step3_px=step3_px)
-	org_dri_beta_dict, add_dri_beta_dict, logs = CEN_step1to4_exe(mon_var_lag_ts, step12_sigs, step34_sig, no_autoc=scheume_autoc, skip_step3=False, step3_px=step3_px)
-
-	if half_to_full_mon & (timescales=='submonthly'):
-		org_dri_beta_dict, add_dri_beta_dict = CEN.aggregated_submonthly(org_dri_beta_dict, add_dri_beta_dict)
-		timescales = 'monthly'
-
-	apt.causal_arrows_plotting_mod(org_dri_beta_dict, add_dri_beta_dict, step34_sig, CEN_lag, timescales, f_add_n, pw_hl=pathway_highlight, half_to_full_mon=half_to_full_mon, only_keep_ax1=True)
-	#apt.causal_arrows_plotting_mod_swapaxis(org_dri_beta_dict, add_dri_beta_dict, step34_sig, CEN_lag, timescales, f_add_n, pw_hl=pathway_highlight, half_to_full_mon=half_to_full_mon)
 
 def CEN_mon_var_lag_initiate(timescales, vars, lags, step3_px=None):
 
@@ -76,7 +45,7 @@ def CEN_mon_var_lag_initiate(timescales, vars, lags, step3_px=None):
 
 def CEN_step1to4_exe(mon_var_lag_ts, step12_sigs, step34_sig, no_autoc=False, skip_step3=False, step3_fdrc=False, step3_px=None):
 
-	# Do the AIK test for each significant level and for each variable
+	# Do the AIC test for each significant level and for each variable
 	dri_dict_condition = {}
 	AIC = {}
 	step1_log, step2_log = {}, {}
@@ -224,7 +193,7 @@ def CEN_step1(mvl_ts, scheume_autoc=False, sig_lev=0.05):
 						continue
 	
 					pdri_ts = mvl_ts[mon][pdri][lag]
-					corr, pval = scipy.stats.pearsonr(var_ts, pdri_ts)
+					corr, pval = stats.pearsonr(var_ts, pdri_ts)
 					corrs_log.append([mon, var, pdri, lag, corr, pval])
 					
 					if (pval <= sig_lev) & (lag > 0):
@@ -255,17 +224,9 @@ def CEN_step2(mvl_ts, pdri_dict, sig_lev=0.05, parents_combination=False):
 			if len(list(pdri.keys())) == 0: # this potential driver might be empty
 				continue
 			
-			# Do the sorting
-			#sorted(pdri.items(), key=lambda (k,v): abs(v), reverse=True) # Not using this method to avloid mistake
-			
 			pdri_keys = [i[0] for i in list(pdri.items())]
 			pdri_abs_coeff = [abs(i[1]) for i in list(pdri.items())]
 			pdri_sort = [j for i, j  in sorted(zip(pdri_abs_coeff, pdri_keys), reverse = True)]
-			
-			
-			#pdri_corr_abs = np.abs([float(i[2]) for i in pdri_list]) # the 2nd column is the correlation. It is a list of list unless it is empty
-			#sort_idx = np.argsort(pdri_corr_abs)[::-1]
-			#pdri_list = pdri_list[sort_idx] # Sort the array according to the 2nd column_stack. From large to smaller
 			pdri_valid = np.ones((len(pdri_sort)), dtype=bool) # this determines if this driver is still valid. Initially all are true
 	
 			# Loop for the pdri and find the condition first
@@ -414,7 +375,7 @@ def CEN_step3(mvl_ts, dri_dict, sig_lev=0.05, px=None, scheume_autoc=False, fdrc
 					if pval <= sig_lev:
 						dri_dict[mon][var].append((pdri, lag))
 
-	if fdrc: # calculate the adjusted qvalue
+	if fdrc: # calculate the adjusted q or p value
 		mvpl_pvals = np.array(mvpl_pvals)
 		sort_idx = np.array(mvpl_pvals[:,4], dtype='float').argsort()
 		mvpl_pvals_sort = mvpl_pvals[sort_idx]
@@ -515,7 +476,6 @@ def partial_corr(C):
 		# The direct equation. Answer is the same as this function
 		p_corr1 = (rxy-(rxz*ryz)) / (((1-ryz**2)**0.5)*((1-rxz**2)**0.5))
 
-	from scipy import stats, linalg
 	C = np.asarray(C)
 	p = C.shape[1]
 	P_corr = np.zeros((p, p), dtype=np.float)
@@ -525,8 +485,8 @@ def partial_corr(C):
 			idx = np.ones(p, dtype=np.bool)
 			idx[i] = False
 			idx[j] = False
-			beta_i = linalg.lstsq(C[:, idx], C[:, j])[0]
-			beta_j = linalg.lstsq(C[:, idx], C[:, i])[0]
+			beta_i = scipy.linalg.lstsq(C[:, idx], C[:, j])[0]
+			beta_j = scipy.linalg.lstsq(C[:, idx], C[:, i])[0]
 			res_j = C[:, j] - C[:, idx].dot( beta_i)
 			res_i = C[:, i] - C[:, idx].dot(beta_j)
 			corr = stats.pearsonr(res_i, res_j)[0]

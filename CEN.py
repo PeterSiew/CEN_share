@@ -555,7 +555,3 @@ def aggregated_submonthly(org_dri_dict, add_dri_dict):
 
 if __name__ == "__main__":
 	main()
-	#dynmiate_CEN()
-	#mingfang_CEN()
-	#mingfang_CEN_new()
-	#main_bs()
